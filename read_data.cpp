@@ -1,7 +1,7 @@
 #include <bits/stdc++.h>
 #include <mpi.h>
 #include <sys/stat.h>
-
+#include <omp.h>
 using namespace std;
 
 float inf = numeric_limits<float>::infinity();
@@ -164,11 +164,17 @@ int main(int argc,char * argv[])
   {
     for(int i=0;i<row_order.size();i++)
     {
-      row_count[i] = row_order[i].size();
+    	if(i==0)
+      	row_count[i] = row_order[i].size();
+      else
+      	row_count[i] = row_count[i-1] + row_order[i].size();
     }
     for(int i=0;i<col_order.size();i++)
     {
-      col_count[i] = col_order[i].size();
+    	if(i==0)
+      	col_count[i] = col_order[i].size();
+      else
+      	col_count[i] = col_count[i-1] + col_order[i].size();
     }
   }
   MPI_Bcast(row_count,max_row,MPI_INT,0,MPI_COMM_WORLD);
@@ -177,22 +183,19 @@ int main(int argc,char * argv[])
   int counter=0;
   for(int i=0;i<num_proc;i++)
   {
-    int summ =0;
-    for(int j=i*row_size;j<(i+1)*row_size;j++)
-    {
-      summ += row_count[j];
-    }
-    count_row[i] = summ;
+  	if(i!=0)
+  	{
+  		count_row[i] = row_count[(i+1)*row_size-1] - row_count[i*row_size-1];
+  		count_col[i] = col_count[(i+1)*col_size-1] - col_count[i*col_size-1];
+  	}
+  	else
+  	{
+  		count_row[i] = row_count[(i+1)*row_size-1];
+  		count_col[i] = col_count[(i+1)*col_size-1];
+
+  	}
   }
-  for(int i=0;i<num_proc;i++)
-  {
-    int summ =0;
-    for(int j=i*col_size;j<(i+1)*col_size;j++)
-    {
-      summ += col_count[j];
-    }
-    count_col[i] = summ;
-  }
+
 
   disp_row[0] = 0;
   for(int i=1;i<num_proc;i++)
@@ -204,7 +207,6 @@ int main(int argc,char * argv[])
   {
     disp_col[i] = count_col[i-1] + disp_col[i-1];
   }
-
 
   node *linearized_mat;
   if(rank==0)
@@ -241,13 +243,17 @@ int main(int argc,char * argv[])
       }
     }
     MPI_Scatterv(linearized_mat,count_row,disp_row,mpinode,my_row,count_row[rank],mpinode,0,MPI_COMM_WORLD);
-    int l_bound = 0;
-    int r_bound = 0;
+    int base = 0;
+    if(rank!=0)
+    	base = row_count[rank*row_size-1];
+    #pragma omp parallel for
     for(int i=rank*row_size;i<(rank+1)*row_size;i++)
     {
-      r_bound = l_bound + row_count[i];
+    	int l_bound = 0;
+    	if(i!=0)
+    		l_bound = row_count[i-1] - base;
+    	int r_bound = row_count[i] - base;
       sort(my_row +l_bound,my_row + r_bound,rowcompare);
-      l_bound = r_bound;
     }
     MPI_Gatherv(my_row,count_row[rank],mpinode,linearized_mat,count_row,disp_row,mpinode,0,MPI_COMM_WORLD);
     if(rank==0)
@@ -274,13 +280,17 @@ int main(int argc,char * argv[])
       }
     }
     MPI_Scatterv(linearized_mat,count_col,disp_col,mpinode,my_col,count_col[rank],mpinode,0,MPI_COMM_WORLD);
-    l_bound = 0;
-    r_bound = 0;
+    base = 0;
+    if(rank!=0)
+    	base = col_count[rank*col_size-1];
+    #pragma omp parallel for    
     for(int i=rank*col_size;i<(rank+1)*col_size;i++)
     {
-      r_bound = l_bound + col_count[i];
+    	int l_bound = 0;
+    	if(i!=0)
+    		l_bound = col_count[i-1] - base;
+    	int r_bound = col_count[i] - base;
       sort(my_col + l_bound,my_col + r_bound,colcompare);
-      l_bound = r_bound;
     }
     MPI_Gatherv(my_col,count_col[rank],mpinode,linearized_mat,count_col,disp_col,mpinode,0,MPI_COMM_WORLD);
     if(rank==0)
