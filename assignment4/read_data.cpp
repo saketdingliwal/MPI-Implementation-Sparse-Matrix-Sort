@@ -104,12 +104,12 @@ void col2row()
 int main(int argc,char * argv[])
 {
 
-  int rank;
-  int num_proc;
+	int rank;
+	int num_proc;
   string input_name = argv[1];
   string output_name = argv[2];
-  int max_row = atoi(argv[3]);
-  int max_col = atoi(argv[4]);
+  int max_col = atoi(argv[3]);
+  int max_row = atoi(argv[4]);
   MPI_Init(&argc,&argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD,&num_proc);
@@ -129,12 +129,16 @@ int main(int argc,char * argv[])
     long lSize;
     pFile = fopen ( input_name.c_str()  , "rb" );
     if (pFile==NULL) {fputs ("File error",stderr); exit (1);}
+    // struct stat st;
+    // stat(input_name.c_str(), &st);
+    // lSize = st.st_size;
     fseek(pFile, 0, SEEK_END); // seek to end of file
     lSize = ftell(pFile); // get current file pointer
     fseek(pFile, 0, SEEK_SET);
     row_order.resize(max_row);
     col_order.resize(max_col);
     num_elem = lSize / (3*sizeof(int) + sizeof(float));
+    // cout << lSize <<endl;
     for(int i=0;i<num_elem;i++)
     {
       int row;
